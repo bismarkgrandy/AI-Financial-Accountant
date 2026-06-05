@@ -35,3 +35,4 @@ pids/
 # Coverage
 coverage/
 .nyc_output/
+/src/generated/prisma
