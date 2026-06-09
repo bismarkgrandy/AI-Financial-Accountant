@@ -5,3 +5,563 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ─────────────── ENUMS ───────────────
+
+enum BusinessType {
+  provision_store
+  supermarket
+  pharmacy
+  spare_parts
+  hardware
+  boutique
+  wholesale
+}
+
+enum RecordingMode {
+  daily_summary
+  transaction
+}
+
+enum Tier {
+  tier1
+  tier2
+}
+
+enum UserRole {
+  owner
+  manager
+  cashier
+  stock_manager
+}
+
+enum EntryType {
+  sale
+  stock_purchase
+  expense
+  debtor_payment
+  creditor_payment
+  daily_summary
+  opening_balance
+  owner_deposit
+  owner_withdrawal
+  stock_count_adjustment
+}
+
+enum PaymentMethod {
+  cash
+  mtn_momo
+  telecel
+  airtel
+  bank
+  credit
+  mixed
+}
+
+enum ExpenseCategory {
+  rent
+  wages
+  utilities
+  transport
+  momo_charges
+  bank_charges
+  packaging
+  miscellaneous
+}
+
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  cogs
+  expense
+}
+
+enum NormalBalance {
+  debit
+  credit
+}
+
+enum DebtStatus {
+  outstanding
+  partial
+  paid
+}
+
+enum StockCountType {
+  actual
+  estimated
+  system
+}
+
+enum ConfidenceLevel {
+  high
+  medium
+  low
+}
+
+enum AssetType {
+  equipment
+  furniture
+  vehicle
+  other
+}
+
+enum AssetCondition {
+  good
+  fair
+  poor
+}
+
+enum SyncStatus {
+  pending
+  synced
+  failed
+  conflict
+}
+
+enum NotificationType {
+  low_stock
+  debt_overdue
+  stock_count_due
+  creditor_due
+  monthly_summary_ready
+}
+
+enum TransactionSource {
+  pos
+  daily_form
+  manual
+  system
+  import
+}
+
+// ─────────────── 1. businesses ───────────────
+
+model Business {
+  id                 String        @id @default(uuid())
+  name               String
+  type               BusinessType
+  ownerName          String
+  phoneNumber        String
+  locationRegion     String
+  locationDistrict   String
+  recordingMode      RecordingMode
+  tier               Tier
+  currency           String        @default("GHS")
+  isActive           Boolean       @default(true)
+  onboardingComplete Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  users              User[]
+  accounts           Account[]
+  journalEntries     JournalEntry[]
+  journalLines       JournalLine[]
+  debtors            Debtor[]
+  debtorPayments     DebtorPayment[]
+  creditors          Creditor[]
+  creditorPayments   CreditorPayment[]
+  products           Product[]
+  productCategories  ProductCategory[]
+  saleItems          SaleItem[]
+  stockPurchaseItems StockPurchaseItem[]
+  stockCounts        StockCount[]
+  assets             Asset[]
+  syncQueue          SyncQueue[]
+  notifications      Notification[]
+
+  @@map("businesses")
+}
+
+// ─────────────── 2. users ───────────────
+
+model User {
+  id           String    @id @default(uuid())
+  businessId   String
+  fullName     String
+  email        String    @unique
+  phoneNumber  String?
+  passwordHash String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  business         Business          @relation(fields: [businessId], references: [id])
+  createdEntries   JournalEntry[]    @relation("CreatedBy")
+  voidedEntries    JournalEntry[]    @relation("VoidedBy")
+  debtorPayments   DebtorPayment[]
+  creditorPayments CreditorPayment[]
+  products         Product[]
+  stockCounts      StockCount[]
+  syncQueue        SyncQueue[]
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// ─────────────── 3. accounts ───────────────
+
+model Account {
+  id            String        @id @default(uuid())
+  businessId    String
+  code          String
+  name          String
+  type          AccountType
+  subtype       String
+  normalBalance NormalBalance
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id])
+  journalLines JournalLine[]
+
+  @@unique([businessId, code])
+  @@unique([businessId, subtype])
+  @@index([businessId])
+  @@map("accounts")
+}
+
+// ─────────────── 4. journal_entries ───────────────
+
+model JournalEntry {
+  id                 String            @id @default(uuid())
+  businessId         String
+  entryDate          DateTime          @db.Date
+  description        String
+  entryType          EntryType
+  referenceNumber    String
+  source             TransactionSource
+  paymentMethod      PaymentMethod?
+  expenseCategory    ExpenseCategory?
+  expenseDescription String?
+  paidTo             String?
+  supplierName       String?
+  customerName       String?
+  cashInHandEod      Decimal?          @db.Decimal(10, 2)
+  momoBalanceEod     Decimal?          @db.Decimal(10, 2)
+  receiptPrinted     Boolean           @default(false)
+  receiptSentTo      String?
+  isVoid             Boolean           @default(false)
+  voidReason         String?
+  voidedAt           DateTime?
+  voidedById         String?
+  createdById        String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  business           Business            @relation(fields: [businessId], references: [id])
+  createdBy          User                @relation("CreatedBy", fields: [createdById], references: [id])
+  voidedBy           User?               @relation("VoidedBy", fields: [voidedById], references: [id])
+  journalLines       JournalLine[]
+  debtors            Debtor[]
+  debtorPayments     DebtorPayment[]
+  creditors          Creditor[]
+  creditorPayments   CreditorPayment[]
+  saleItems          SaleItem[]
+  stockPurchaseItems StockPurchaseItem[]
+
+  @@index([businessId, entryDate])
+  @@index([businessId, entryType])
+  @@map("journal_entries")
+}
+
+// ─────────────── 5. journal_lines ───────────────
+
+model JournalLine {
+  id         String   @id @default(uuid())
+  businessId String
+  entryId    String
+  accountId  String
+  debit      Decimal  @default(0) @db.Decimal(15, 2)
+  credit     Decimal  @default(0) @db.Decimal(15, 2)
+  memo       String?
+  createdAt  DateTime @default(now())
+
+  business Business     @relation(fields: [businessId], references: [id])
+  entry    JournalEntry @relation(fields: [entryId], references: [id])
+  account  Account      @relation(fields: [accountId], references: [id])
+
+  @@index([businessId])
+  @@index([entryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+// ─────────────── 6. debtors ───────────────
+
+model Debtor {
+  id                String     @id @default(uuid())
+  businessId        String
+  journalEntryId    String
+  customerName      String
+  customerPhone     String?
+  amountOriginal    Decimal    @db.Decimal(10, 2)
+  amountOutstanding Decimal    @db.Decimal(10, 2)
+  debtDate          DateTime   @db.Date
+  dueDate           DateTime?  @db.Date
+  status            DebtStatus @default(outstanding)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  business     Business        @relation(fields: [businessId], references: [id])
+  journalEntry JournalEntry    @relation(fields: [journalEntryId], references: [id])
+  payments     DebtorPayment[]
+
+  @@index([businessId, status])
+  @@map("debtors")
+}
+
+// ─────────────── 7. debtor_payments ───────────────
+
+model DebtorPayment {
+  id             String        @id @default(uuid())
+  businessId     String
+  debtorId       String
+  journalEntryId String
+  amountPaid     Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod
+  paymentDate    DateTime      @db.Date
+  receivedById   String
+  notes          String?
+  createdAt      DateTime      @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  debtor       Debtor       @relation(fields: [debtorId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  receivedBy   User         @relation(fields: [receivedById], references: [id])
+
+  @@index([businessId])
+  @@index([debtorId])
+  @@map("debtor_payments")
+}
+
+// ─────────────── 8. creditors ───────────────
+
+model Creditor {
+  id                String     @id @default(uuid())
+  businessId        String
+  journalEntryId    String
+  supplierName      String
+  supplierPhone     String?
+  amountOriginal    Decimal    @db.Decimal(10, 2)
+  amountOutstanding Decimal    @db.Decimal(10, 2)
+  debtDate          DateTime   @db.Date
+  dueDate           DateTime?  @db.Date
+  status            DebtStatus @default(outstanding)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id])
+  journalEntry JournalEntry      @relation(fields: [journalEntryId], references: [id])
+  payments     CreditorPayment[]
+
+  @@index([businessId, status])
+  @@map("creditors")
+}
+
+// ─────────────── 9. creditor_payments ───────────────
+
+model CreditorPayment {
+  id             String        @id @default(uuid())
+  businessId     String
+  creditorId     String
+  journalEntryId String
+  amountPaid     Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod
+  paymentDate    DateTime      @db.Date
+  paidById       String
+  notes          String?
+  createdAt      DateTime      @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  creditor     Creditor     @relation(fields: [creditorId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  paidBy       User         @relation(fields: [paidById], references: [id])
+
+  @@index([businessId])
+  @@index([creditorId])
+  @@map("creditor_payments")
+}
+
+// ─────────────── 10. products ───────────────
+
+model Product {
+  id              String   @id @default(uuid())
+  businessId      String
+  categoryId      String?
+  name            String
+  sku             String?
+  barcode         String?
+  sellingPrice    Decimal  @db.Decimal(10, 2)
+  costPrice       Decimal  @db.Decimal(10, 2)
+  currentStockQty Decimal  @default(0) @db.Decimal(10, 3)
+  minimumStockQty Decimal  @default(0) @db.Decimal(10, 3)
+  unitOfMeasure   String   @default("piece")
+  isActive        Boolean  @default(true)
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business           Business            @relation(fields: [businessId], references: [id])
+  category           ProductCategory?    @relation(fields: [categoryId], references: [id])
+  createdBy          User                @relation(fields: [createdById], references: [id])
+  saleItems          SaleItem[]
+  stockPurchaseItems StockPurchaseItem[]
+
+  @@index([businessId, isActive])
+  @@map("products")
+}
+
+// ─────────────── 11. product_categories ───────────────
+
+model ProductCategory {
+  id         String   @id @default(uuid())
+  businessId String
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id])
+  products Product[]
+
+  @@index([businessId])
+  @@map("product_categories")
+}
+
+// ─────────────── 12. sale_items ───────────────
+
+model SaleItem {
+  id               String   @id @default(uuid())
+  businessId       String
+  journalEntryId   String
+  productId        String?
+  productName      String
+  unitSellingPrice Decimal  @db.Decimal(10, 2)
+  unitCostPrice    Decimal  @db.Decimal(10, 2)
+  quantity         Decimal  @db.Decimal(10, 3)
+  lineTotal        Decimal  @db.Decimal(10, 2)
+  lineCogs         Decimal  @db.Decimal(10, 2)
+  lineGrossProfit  Decimal  @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+
+  @@index([businessId])
+  @@index([journalEntryId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+// ─────────────── 13. stock_purchase_items ───────────────
+
+model StockPurchaseItem {
+  id             String   @id @default(uuid())
+  businessId     String
+  journalEntryId String
+  productId      String?
+  productName    String
+  quantity       Decimal? @db.Decimal(10, 3)
+  unitCost       Decimal  @db.Decimal(10, 2)
+  lineTotal      Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+
+  @@index([businessId])
+  @@index([journalEntryId])
+  @@map("stock_purchase_items")
+}
+
+// ─────────────── 14. stock_counts ───────────────
+
+model StockCount {
+  id              String          @id @default(uuid())
+  businessId      String
+  countDate       DateTime        @db.Date
+  stockValue      Decimal         @db.Decimal(10, 2)
+  countType       StockCountType
+  confidenceLevel ConfidenceLevel
+  notes           String?
+  recordedById    String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  business   Business @relation(fields: [businessId], references: [id])
+  recordedBy User     @relation(fields: [recordedById], references: [id])
+
+  @@index([businessId, countDate])
+  @@map("stock_counts")
+}
+
+// ─────────────── 15. assets ───────────────
+
+model Asset {
+  id            String          @id @default(uuid())
+  businessId    String
+  assetName     String
+  assetType     AssetType
+  currentValue  Decimal         @db.Decimal(10, 2)
+  purchaseValue Decimal?        @db.Decimal(10, 2)
+  purchaseDate  DateTime?       @db.Date
+  condition     AssetCondition?
+  notes         String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, isActive])
+  @@map("assets")
+}
+
+// ─────────────── 16. sync_queue ───────────────
+
+model SyncQueue {
+  id               String     @id
+  businessId       String
+  userId           String
+  operation        String
+  payload          Json
+  deviceId         String
+  createdLocallyAt DateTime
+  syncedAt         DateTime?
+  syncStatus       SyncStatus @default(pending)
+  retryCount       Int        @default(0)
+  errorMessage     String?
+  createdAt        DateTime   @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([businessId, syncStatus])
+  @@map("sync_queue")
+}
+
+// ─────────────── 17. notifications ───────────────
+
+model Notification {
+  id         String           @id @default(uuid())
+  businessId String
+  type       NotificationType
+  title      String
+  message    String
+  relatedId  String?
+  isRead     Boolean          @default(false)
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, isRead])
+  @@map("notifications")
+}
