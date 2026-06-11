@@ -6,6 +6,8 @@ import { env } from '@/config/env';
 import { errorHandler } from '@/middleware/errorHandler';
 import logger from '@/utils/logger';
 
+import authRoutes from '@/modules/auth/auth.routes';
+
 const app = express();
 
 app.use(helmet());
@@ -43,7 +45,8 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// TODO: Import and use my routes here
+
+app.use('/api/v1/auth', authRoutes);
 
 app.use(errorHandler);
 

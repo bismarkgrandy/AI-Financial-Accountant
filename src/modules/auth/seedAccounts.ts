@@ -1,6 +1,4 @@
-import { PrismaClient, AccountType, NormalBalance } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma, AccountType, NormalBalance } from '@prisma/client';
 
 export const CHART_OF_ACCOUNTS = [
   { code: '1001', name: 'Cash in hand',              type: 'asset',     subtype: 'cash_hand',         normalBalance: 'debit'  },
@@ -30,11 +28,10 @@ export const CHART_OF_ACCOUNTS = [
   { code: '7008', name: 'Miscellaneous',             type: 'expense',   subtype: 'miscellaneous',     normalBalance: 'debit'  },
 ] as const;
 
-// Called by the signup flow — seeds all 24 accounts for one business
-export async function seedAccountsForBusiness(
+export const seedAccountsForBusiness = async (
   businessId: string,
-  tx = prisma,
-): Promise<void> {
+  tx: Prisma.TransactionClient,
+): Promise<void> => {
   await tx.account.createMany({
     data: CHART_OF_ACCOUNTS.map((a) => ({
       businessId,
@@ -46,18 +43,4 @@ export async function seedAccountsForBusiness(
     })),
     skipDuplicates: true,
   });
-}
-
-async function main() {
-  console.log(`Chart of accounts ready — ${CHART_OF_ACCOUNTS.length} accounts per business.`);
-  console.log('Accounts are seeded per business at signup, not globally.');
-}
-
-main()
-  .catch((e) => {
-    console.error(e);
-    (globalThis as any).process?.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+};

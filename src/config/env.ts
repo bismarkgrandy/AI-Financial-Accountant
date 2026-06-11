@@ -16,6 +16,11 @@ const envSchema = z.object({
   PGADMIN_PORT: z.string().default('5050'),
   PGADMIN_EMAIL: z.string().min(1, 'PGADMIN_EMAIL is required'),
   PGADMIN_PASSWORD: z.string().min(1, 'PGADMIN_PASSWORD is required'),
+
+  JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be 32+ chars'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be 32+ chars'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 });
 
 const parsed = envSchema.safeParse(process.env);
