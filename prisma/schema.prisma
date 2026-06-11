@@ -16,6 +16,11 @@ enum BusinessType {
   hardware
   boutique
   wholesale
+  cosmetics
+  electronics
+  stationery
+  phone_accessories
+  other
 }
 
 enum RecordingMode {
@@ -198,6 +203,7 @@ model User {
   products         Product[]
   stockCounts      StockCount[]
   syncQueue        SyncQueue[]
+  refreshTokens    RefreshToken[]
 
   @@index([businessId])
   @@map("users")
@@ -564,4 +570,20 @@ model Notification {
 
   @@index([businessId, isRead])
   @@map("notifications")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  deviceInfo String?
+  expiresAt  DateTime
+  revoked    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
 }
