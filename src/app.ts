@@ -7,6 +7,7 @@ import { errorHandler } from '@/middleware/errorHandler';
 import logger from '@/utils/logger';
 
 import authRoutes from '@/modules/auth/auth.routes';
+import onboardingRoutes from '@/modules/onboarding/onboarding.routes';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.get('/health', (_req, res) => {
 
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/onboarding', onboardingRoutes);
 
 app.use(errorHandler);
 
