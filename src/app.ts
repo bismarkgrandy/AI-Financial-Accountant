@@ -10,6 +10,7 @@ import authRoutes from '@/modules/auth/auth.routes';
 import onboardingRoutes from '@/modules/onboarding/onboarding.routes';
 import productsRoutes from '@/modules/products/products.routes';
 import salesRoutes from '@/modules/sales/sales.routes';
+import debtorsRoutes from '@/modules/debtors/debtors.routes';
 
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/products', productsRoutes);
 app.use('/api/v1/sales', salesRoutes);
+app.use('/api/v1/debtors', debtorsRoutes);
 
 app.use(errorHandler);
 
