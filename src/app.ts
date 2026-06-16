@@ -12,6 +12,7 @@ import productsRoutes from '@/modules/products/products.routes';
 import salesRoutes from '@/modules/sales/sales.routes';
 import debtorsRoutes from '@/modules/debtors/debtors.routes';
 import purchasesRoutes from '@/modules/purchases/purchases.routes';
+import creditorsRoutes from '@/modules/creditors/creditors.routes';
 
 
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/v1/products', productsRoutes);
 app.use('/api/v1/sales', salesRoutes);
 app.use('/api/v1/debtors', debtorsRoutes);
 app.use('/api/v1/purchases', purchasesRoutes);
+app.use('/api/v1/creditors', creditorsRoutes);
 
 app.use(errorHandler);
 
