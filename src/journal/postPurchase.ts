@@ -99,7 +99,6 @@ export const postPurchase = async (
 
     // ── 3. For credit: resolve the supplier (find-or-create) ──
     let creditorId: string | null = null;
-    let creditorName: string | null = null;
 
     if (isCredit) {
       if (input.creditorId) {
@@ -110,7 +109,6 @@ export const postPurchase = async (
           throw new AppError('Selected supplier not found', 404);
         }
         creditorId = creditor.id;
-        creditorName = creditor.name;
       } else {
         const creditor = await tx.creditor.create({
           data: {
@@ -120,7 +118,6 @@ export const postPurchase = async (
           },
         });
         creditorId = creditor.id;
-        creditorName = creditor.name;
       }
     }
 
@@ -135,8 +132,6 @@ export const postPurchase = async (
         referenceNumber: reference,
         source: 'manual',
         paymentMethod: input.paymentMethod as never,
-        supplierName: creditorName,
-        expenseDescription: input.notes ?? null,
         createdById: userId,
       },
     });

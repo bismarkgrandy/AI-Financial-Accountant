@@ -7,23 +7,22 @@ export const createSale = async (
   input: CreateSaleInput,
 ) => {
   const result = await postSale(businessId, userId, {
-    paymentMethod: input.paymentMethod,
-    items: input.items,
-    debtorId: input.debtorId,
-    customerName: input.customerName,
-    customerPhone: input.customerPhone,
-    dueDate: input.dueDate,
-    receiptPrinted: input.receiptPrinted,
-    receiptSentTo: input.receiptSentTo,
-  });
+  paymentMethod: input.paymentMethod,
+  items: input.items,
+  debtorId: input.debtorId,
+  customerName: input.customerName,
+  customerPhone: input.customerPhone,
+  dueDate: input.dueDate,
+});
 
-  return {
-    referenceNumber: result.entry.referenceNumber,
-    totalRevenue: result.totalRevenue,
-    totalCogs: result.totalCogs,
-    grossProfit: result.grossProfit,
-    itemCount: result.itemCount,
-    isCredit: result.isCredit,
-    debtorId: result.debtorId,
-  };
+return {
+  referenceNumber: result.entry.referenceNumber,
+  saleId: result.saleId,
+  totalRevenue: result.totalRevenue,
+  totalCogs: result.totalCogs,
+  grossProfit: result.grossProfit,
+  itemCount: result.itemCount,
+  isCredit: result.isCredit,
+  debtorId: result.debtorId,
+};
 };

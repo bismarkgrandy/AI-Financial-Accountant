@@ -16,8 +16,6 @@ export interface PostSaleInput {
   customerName?: string;
   customerPhone?: string;
   dueDate?: string;
-  receiptPrinted?: boolean;
-  receiptSentTo?: string;
 }
 
 export const postSale = async (
@@ -27,7 +25,6 @@ export const postSale = async (
 ) => {
   const isCredit = input.paymentMethod === 'credit';
 
-  // Credit sales must identify the debtor (existing OR new)
   if (isCredit) {
     const hasExisting = !!input.debtorId;
     const hasNew = !!input.customerName && input.customerName.trim().length > 0;
@@ -40,7 +37,7 @@ export const postSale = async (
   }
 
   return prisma.$transaction(async (tx) => {
-    // ── 1. Load the products ──
+    // 1. Load products
     const productIds = input.items.map((i) => i.productId);
     const products = await tx.product.findMany({
       where: { id: { in: productIds }, businessId, isActive: true },
@@ -50,10 +47,10 @@ export const postSale = async (
     }
     const productMap = new Map(products.map((p) => [p.id, p]));
 
-    // ── 2. Calculate totals + check stock ──
+    // 2. Calculate totals + check stock
     let totalRevenue = 0;
     let totalCogs = 0;
-    const saleItemsData: Prisma.SaleItemCreateManyInput[] = [];
+    const saleItemsRaw: Omit<Prisma.SaleItemCreateManyInput, 'saleId' | 'journalEntryId'>[] = [];
     const stockUpdates: { id: string; newQty: number }[] = [];
 
     for (const item of input.items) {
@@ -74,9 +71,8 @@ export const postSale = async (
       totalRevenue += lineTotal;
       totalCogs += lineCogs;
 
-      saleItemsData.push({
+      saleItemsRaw.push({
         businessId,
-        journalEntryId: '',
         productId: product.id,
         productName: product.name,
         unitSellingPrice: sellingPrice,
@@ -89,23 +85,16 @@ export const postSale = async (
       stockUpdates.push({ id: product.id, newQty: currentStock - item.quantity });
     }
 
-    // ── 3. For credit: resolve the debtor (find-or-create) ──
+    // 3. Resolve debtor (credit only)
     let debtorId: string | null = null;
-    let debtorName: string | null = null;
-
     if (isCredit) {
       if (input.debtorId) {
-        // Existing debtor — verify it belongs to this business
         const debtor = await tx.debtor.findFirst({
           where: { id: input.debtorId, businessId, isActive: true },
         });
-        if (!debtor) {
-          throw new AppError('Selected customer not found', 404);
-        }
+        if (!debtor) throw new AppError('Selected customer not found', 404);
         debtorId = debtor.id;
-        debtorName = debtor.name;
       } else {
-        // New debtor — create them
         const debtor = await tx.debtor.create({
           data: {
             businessId,
@@ -114,11 +103,10 @@ export const postSale = async (
           },
         });
         debtorId = debtor.id;
-        debtorName = debtor.name;
       }
     }
 
-    // ── 4. Create the journal entry header ──
+    // 4. Journal entry header (NO customerName/receipt fields now)
     const reference = await generateReferenceNumber(tx, businessId, 'sale');
     const entry = await tx.journalEntry.create({
       data: {
@@ -129,50 +117,51 @@ export const postSale = async (
         referenceNumber: reference,
         source: 'pos',
         paymentMethod: input.paymentMethod as never,
-        customerName: debtorName,
-        receiptPrinted: input.receiptPrinted ?? false,
-        receiptSentTo: input.receiptSentTo ?? null,
         createdById: userId,
       },
     });
 
-    // ── 5. Determine money account + build 4 lines ──
+    // 5. The 4 journal lines
     const moneyAccount = isCredit
       ? await findAccountBySubtype(tx, businessId, 'debtors')
       : await findPaymentAccount(tx, businessId, input.paymentMethod);
-
     const salesAccount = await findAccountBySubtype(tx, businessId, 'sales');
     const cogsAccount = await findAccountBySubtype(tx, businessId, 'cogs');
     const stockAccount = await findAccountBySubtype(tx, businessId, 'stock');
 
     await tx.journalLine.createMany({
       data: [
-        {
-          businessId, entryId: entry.id, accountId: moneyAccount.id,
-          debit: totalRevenue, credit: 0,
-          memo: isCredit ? 'Amount owed by customer' : 'Payment received',
-        },
-        {
-          businessId, entryId: entry.id, accountId: salesAccount.id,
-          debit: 0, credit: totalRevenue, memo: 'Sales revenue',
-        },
-        {
-          businessId, entryId: entry.id, accountId: cogsAccount.id,
-          debit: totalCogs, credit: 0, memo: 'Cost of goods sold',
-        },
-        {
-          businessId, entryId: entry.id, accountId: stockAccount.id,
-          debit: 0, credit: totalCogs, memo: 'Stock reduction',
-        },
+        { businessId, entryId: entry.id, accountId: moneyAccount.id, debit: totalRevenue, credit: 0, memo: isCredit ? 'Amount owed by customer' : 'Payment received' },
+        { businessId, entryId: entry.id, accountId: salesAccount.id, debit: 0, credit: totalRevenue, memo: 'Sales revenue' },
+        { businessId, entryId: entry.id, accountId: cogsAccount.id, debit: totalCogs, credit: 0, memo: 'Cost of goods sold' },
+        { businessId, entryId: entry.id, accountId: stockAccount.id, debit: 0, credit: totalCogs, memo: 'Stock reduction' },
       ],
     });
 
-    // ── 6. Create sale_items ──
-    await tx.saleItem.createMany({
-      data: saleItemsData.map((si) => ({ ...si, journalEntryId: entry.id })),
+    // 6. Create the SALE header row (NEW)
+    const sale = await tx.sale.create({
+      data: {
+        businessId,
+        journalEntryId: entry.id,
+        isCredit,
+        totalRevenue,
+        totalCogs,
+        grossProfit: totalRevenue - totalCogs,
+        debtorId,
+        createdById: userId,
+      },
     });
 
-    // ── 7. Reduce stock ──
+    // 7. Create sale_items, linked to the SALE (and the entry)
+    await tx.saleItem.createMany({
+      data: saleItemsRaw.map((si) => ({
+        ...si,
+        saleId: sale.id,
+        journalEntryId: entry.id,
+      })),
+    });
+
+    // 8. Reduce stock
     for (const u of stockUpdates) {
       await tx.product.update({
         where: { id: u.id },
@@ -180,7 +169,7 @@ export const postSale = async (
       });
     }
 
-    // ── 8. Credit only: create the DEBT under the debtor ──
+    // 9. Credit: create the debt
     if (isCredit && debtorId) {
       await tx.debt.create({
         data: {
@@ -198,6 +187,7 @@ export const postSale = async (
 
     return {
       entry,
+      saleId: sale.id,
       totalRevenue,
       totalCogs,
       grossProfit: totalRevenue - totalCogs,
