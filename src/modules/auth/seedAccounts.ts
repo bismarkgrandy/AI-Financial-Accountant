@@ -25,8 +25,7 @@ export const CHART_OF_ACCOUNTS = [
   { code: '7005', name: 'Mobile money charges',      type: 'expense',   subtype: 'momo_charges',      normalBalance: 'debit'  },
   { code: '7006', name: 'Bank charges',              type: 'expense',   subtype: 'bank_charges',      normalBalance: 'debit'  },
   { code: '7007', name: 'Packaging materials',       type: 'expense',   subtype: 'packaging',         normalBalance: 'debit'  },
-  { code: '7008', name: 'Miscellaneous',             type: 'expense',   subtype: 'miscellaneous',     normalBalance: 'debit'  },
-] as const;
+{ code: '7008',   name: 'Other expenses',            type: 'expense',   subtype: 'other',             normalBalance: 'debit'  },] as const;
 
 export const seedAccountsForBusiness = async (
   businessId: string,

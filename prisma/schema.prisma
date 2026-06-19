@@ -165,6 +165,7 @@ model Business {
   journalEntries     JournalEntry[]
   journalLines       JournalLine[]
   sales              Sale[]
+  expenses           Expense[]
   debtors            Debtor[]
   debts              Debt[]
   debtorPayments     DebtorPayment[]
@@ -201,6 +202,7 @@ model User {
   business         Business          @relation(fields: [businessId], references: [id])
   createdEntries   JournalEntry[]    @relation("CreatedBy")
   debtorPayments   DebtorPayment[]
+  expenses         Expense[]
   creditorPayments CreditorPayment[]
   products         Product[]
   stockCounts      StockCount[]
@@ -228,6 +230,7 @@ model Account {
 
   business     Business      @relation(fields: [businessId], references: [id])
   journalLines JournalLine[]
+  expenses     Expense[]
 
   @@unique([businessId, code])
   @@unique([businessId, subtype])
@@ -254,6 +257,7 @@ model JournalEntry {
   business           Business            @relation(fields: [businessId], references: [id])
   createdBy          User                @relation("CreatedBy", fields: [createdById], references: [id])
   journalLines       JournalLine[]
+  expenses           Expense[]
   debts              Debt[]
   debtorPayments     DebtorPayment[]
   payables           Payable[]
@@ -311,6 +315,29 @@ model Sale {
   @@index([journalEntryId])
   @@index([debtorId])
   @@map("sales")
+}
+
+model Expense {
+  id               String        @id @default(uuid())
+  businessId       String
+  journalEntryId   String
+  expenseAccountId String // the debited expense account (the category)
+  amount           Decimal       @db.Decimal(10, 2)
+  paymentMethod    PaymentMethod
+  paidTo           String? // user-filled, structured, queryable
+  notes            String? // user-filled, structured, queryable
+  createdById      String
+  createdAt        DateTime      @default(now())
+
+  business       Business     @relation(fields: [businessId], references: [id])
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id])
+  expenseAccount Account      @relation(fields: [expenseAccountId], references: [id])
+  createdBy      User         @relation(fields: [createdById], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([journalEntryId])
+  @@index([expenseAccountId])
+  @@map("expenses")
 }
 
 // ─────────────── debtors (the PEOPLE who owe me) ───────────────
