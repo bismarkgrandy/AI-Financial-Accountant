@@ -14,12 +14,12 @@ export const createProductSchema = z.object({
 export const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   sellingPrice: z.number().positive().optional(),
-  costPrice: z.number().min(0).optional(),
   minimumStockQty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
-  sku: z.string().optional(),
+  sku: z.string().nullable().optional(),        // nullable → can clear it
+  barcode: z.string().nullable().optional(),    
   categoryId: z.string().uuid().nullable().optional(),
-});
+}).strict();
 
 export const listProductsSchema = z.object({
   search: z.string().optional(),

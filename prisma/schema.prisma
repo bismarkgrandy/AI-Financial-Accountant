@@ -164,6 +164,7 @@ model Business {
   accounts           Account[]
   journalEntries     JournalEntry[]
   journalLines       JournalLine[]
+  sales              Sale[]
   debtors            Debtor[]
   debts              Debt[]
   debtorPayments     DebtorPayment[]
@@ -199,13 +200,13 @@ model User {
 
   business         Business          @relation(fields: [businessId], references: [id])
   createdEntries   JournalEntry[]    @relation("CreatedBy")
-  voidedEntries    JournalEntry[]    @relation("VoidedBy")
   debtorPayments   DebtorPayment[]
   creditorPayments CreditorPayment[]
   products         Product[]
   stockCounts      StockCount[]
   syncQueue        SyncQueue[]
   refreshTokens    RefreshToken[]
+  sales            Sale[]
 
   @@index([businessId])
   @@map("users")
@@ -237,34 +238,21 @@ model Account {
 // ─────────────── 4. journal_entries ───────────────
 
 model JournalEntry {
-  id                 String            @id @default(uuid())
-  businessId         String
-  entryDate          DateTime          @db.Date
-  description        String
-  entryType          EntryType
-  referenceNumber    String
-  source             TransactionSource
-  paymentMethod      PaymentMethod?
-  expenseCategory    ExpenseCategory?
-  expenseDescription String?
-  paidTo             String?
-  supplierName       String?
-  customerName       String?
-  cashInHandEod      Decimal?          @db.Decimal(10, 2)
-  momoBalanceEod     Decimal?          @db.Decimal(10, 2)
-  receiptPrinted     Boolean           @default(false)
-  receiptSentTo      String?
-  isVoid             Boolean           @default(false)
-  voidReason         String?
-  voidedAt           DateTime?
-  voidedById         String?
-  createdById        String
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  businessId      String
+  entryDate       DateTime          @db.Date
+  description     String
+  entryType       EntryType
+  referenceNumber String
+  source          TransactionSource
+  paymentMethod   PaymentMethod?
+  isVoid          Boolean           @default(false)
+  createdById     String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   business           Business            @relation(fields: [businessId], references: [id])
   createdBy          User                @relation("CreatedBy", fields: [createdById], references: [id])
-  voidedBy           User?               @relation("VoidedBy", fields: [voidedById], references: [id])
   journalLines       JournalLine[]
   debts              Debt[]
   debtorPayments     DebtorPayment[]
@@ -272,6 +260,7 @@ model JournalEntry {
   creditorPayments   CreditorPayment[]
   saleItems          SaleItem[]
   stockPurchaseItems StockPurchaseItem[]
+  sales              Sale[]
 
   @@index([businessId, entryDate])
   @@index([businessId, entryType])
@@ -300,6 +289,30 @@ model JournalLine {
   @@map("journal_lines")
 }
 
+model Sale {
+  id             String   @id @default(uuid())
+  businessId     String
+  journalEntryId String
+  isCredit       Boolean  @default(false)
+  totalRevenue   Decimal  @db.Decimal(10, 2)
+  totalCogs      Decimal  @db.Decimal(10, 2)
+  grossProfit    Decimal  @db.Decimal(10, 2)
+  debtorId       String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  debtor       Debtor?      @relation(fields: [debtorId], references: [id])
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  saleItems    SaleItem[]
+
+  @@index([businessId, createdAt])
+  @@index([journalEntryId])
+  @@index([debtorId])
+  @@map("sales")
+}
+
 // ─────────────── debtors (the PEOPLE who owe me) ───────────────
 
 model Debtor {
@@ -314,6 +327,7 @@ model Debtor {
 
   business Business        @relation(fields: [businessId], references: [id])
   debts    Debt[]
+  sales    Sale[]
   payments DebtorPayment[]
 
   @@index([businessId, isActive])
@@ -462,6 +476,7 @@ model Product {
   saleItems          SaleItem[]
   stockPurchaseItems StockPurchaseItem[]
 
+  @@unique([businessId, sku])
   @@index([businessId, isActive])
   @@map("products")
 }
@@ -487,6 +502,7 @@ model ProductCategory {
 model SaleItem {
   id               String   @id @default(uuid())
   businessId       String
+  saleId           String
   journalEntryId   String
   productId        String?
   productName      String
@@ -499,10 +515,12 @@ model SaleItem {
   createdAt        DateTime @default(now())
 
   business     Business     @relation(fields: [businessId], references: [id])
+  sale         Sale         @relation(fields: [saleId], references: [id])
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   product      Product?     @relation(fields: [productId], references: [id])
 
   @@index([businessId])
+  @@index([saleId])
   @@index([journalEntryId])
   @@index([productId])
   @@map("sale_items")

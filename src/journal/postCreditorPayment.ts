@@ -81,7 +81,6 @@ export const postCreditorPayment = async (
         referenceNumber: reference,
         source: 'manual',
         paymentMethod: input.paymentMethod as never,
-        supplierName: creditor.name,
         createdById: userId,
       },
     });

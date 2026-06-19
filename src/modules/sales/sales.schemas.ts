@@ -18,8 +18,6 @@ export const createSaleSchema = z
     customerPhone: z.string().optional(),
     dueDate: z.string().optional(),
 
-    receiptPrinted: z.boolean().optional(),
-    receiptSentTo: z.string().optional(),
   })
   .refine(
     (data) => {

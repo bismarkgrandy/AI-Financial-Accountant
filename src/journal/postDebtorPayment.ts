@@ -81,7 +81,6 @@ export const postDebtorPayment = async (
         referenceNumber: reference,
         source: 'manual',
         paymentMethod: input.paymentMethod as never,
-        customerName: debtor.name,
         createdById: userId,
       },
     });
