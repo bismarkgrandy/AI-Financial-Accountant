@@ -25,3 +25,23 @@ export const getCashPosition = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+export const getDebtorsSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { businessId } = req as AuthRequest;
+    const result = await reportsService.getDebtorsSummary(businessId);
+    sendSuccess(res, result, 200, 'Debtors summary');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCreditorsSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { businessId } = req as AuthRequest;
+    const result = await reportsService.getCreditorsSummary(businessId);
+    sendSuccess(res, result, 200, 'Creditors summary');
+  } catch (error) {
+    next(error);
+  }
+};
