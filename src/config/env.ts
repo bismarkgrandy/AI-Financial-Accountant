@@ -21,6 +21,14 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be 32+ chars'),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
+
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
+  EMAIL_FROM: z.string().min(1, 'EMAIL_FROM is required'),
+
+  OTP_EXPIRY_MINUTES: z.coerce.number().int().positive().default(10),
+  MAX_OTP_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  OTP_RESEND_MAX: z.coerce.number().int().positive().default(3),
+  OTP_RESEND_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
 });
 
 const parsed = envSchema.safeParse(process.env);

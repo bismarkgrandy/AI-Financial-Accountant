@@ -2,11 +2,13 @@ import { Router } from 'express';
 import * as productsController from './products.controller';
 import { authenticate } from '@/middleware/auth';
 import { requireRole } from '@/middleware/roles';
+import { requireVerified } from '@/middleware/requireVerified';
 
 const router = Router();
 
 // All product routes require authentication
 router.use(authenticate);
+router.use(requireVerified);
 
 // Reading — any authenticated user (cashiers need to see products)
 router.get('/', productsController.listProducts);
