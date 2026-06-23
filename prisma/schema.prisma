@@ -53,6 +53,11 @@ enum EntryType {
   stock_count_adjustment
 }
 
+enum VerificationPurpose {
+  email_verification
+  password_reset
+}
+
 enum PaymentMethod {
   cash
   mtn_momo
@@ -194,24 +199,42 @@ model User {
   phoneNumber  String?
   passwordHash String
   role         UserRole
+  emailVerified Boolean @default(false)
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  business         Business          @relation(fields: [businessId], references: [id])
-  createdEntries   JournalEntry[]    @relation("CreatedBy")
-  debtorPayments   DebtorPayment[]
-  expenses         Expense[]
-  creditorPayments CreditorPayment[]
-  products         Product[]
-  stockCounts      StockCount[]
-  syncQueue        SyncQueue[]
-  refreshTokens    RefreshToken[]
-  sales            Sale[]
+  business           Business          @relation(fields: [businessId], references: [id])
+  emailVerifications EmailVerification[]
+  createdEntries     JournalEntry[]    @relation("CreatedBy")
+  debtorPayments     DebtorPayment[]
+  expenses           Expense[]
+  creditorPayments   CreditorPayment[]
+  products           Product[]
+  stockCounts        StockCount[]
+  syncQueue          SyncQueue[]
+  refreshTokens      RefreshToken[]
+  sales              Sale[]
 
   @@index([businessId])
   @@map("users")
+}
+
+model EmailVerification {
+  id         String              @id @default(uuid())
+  userId     String
+  purpose    VerificationPurpose @default(email_verification)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int                 @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verifications")
 }
 
 // ─────────────── 3. accounts ───────────────

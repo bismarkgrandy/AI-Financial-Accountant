@@ -29,4 +29,23 @@ export const logoutSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
+export const verifyEmailSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email('Valid email is required'),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Valid email is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
