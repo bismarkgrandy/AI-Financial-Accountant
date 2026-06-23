@@ -41,6 +41,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=builder --chown=node:node /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/prisma.config.ts ./prisma.config.ts
 
 # Make the entire /app (incl. npm-installed node_modules) owned by node
 # so Prisma can write its engine files at runtime
