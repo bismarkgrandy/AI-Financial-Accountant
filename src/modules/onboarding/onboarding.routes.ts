@@ -9,8 +9,8 @@ const router = Router();
 // Only the owner completes onboarding, and they must be authenticated
 router.post(
   '/complete',
-  requireVerified,
-  authenticate,
+  authenticate,        // sets userId on the request
+  requireVerified,     // now userId exists, so the findUnique works
   requireRole('owner'),
   onboardingController.completeOnboarding,
 );
