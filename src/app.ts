@@ -16,6 +16,7 @@ import creditorsRoutes from '@/modules/creditors/creditors.routes';
 import expenseRoutes from '@/modules/expenses/expenses.routes';
 import reportsRoutes from '@/modules/reports/reports.routes';
 import ownerRoutes from '@/modules/owner/owner.routes';
+import businessRoutes from './modules/business/business.routes';
 
 
 
@@ -67,6 +68,7 @@ app.use('/api/v1/creditors', creditorsRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/owner', ownerRoutes);
+app.use('/api/v1/business', businessRoutes);
 
 
 app.use(errorHandler);
