@@ -32,3 +32,45 @@ export const sendVerificationEmail = (to: string, code: string): Promise<void> =
     `,
     text: `Your FinMind password reset code is ${code}. It expires in ${env.OTP_EXPIRY_MINUTES} minutes. If you didn't request this, ignore this email.`,
   });
+
+  export const sendEmailChangeVerification = (to: string, code: string): Promise<void> =>
+  sendEmail({
+    to,
+    subject: 'Confirm your new FinMind email',
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="margin: 0 0 16px;">Confirm your new email</h2>
+        <p style="margin: 0 0 8px;">Enter this code in the app to confirm this is your new email address:</p>
+        <p style="font-size: 32px; font-weight: bold; letter-spacing: 6px; margin: 8px 0 16px;">${code}</p>
+        <p style="margin: 0 0 8px;">This code expires in ${env.OTP_EXPIRY_MINUTES} minutes.</p>
+        <p style="color: #888; font-size: 13px; margin: 16px 0 0;">If you didn't request this, you can safely ignore this email — your login email won't change.</p>
+      </div>
+    `,
+    text: `Your FinMind email-change code is ${code}. It expires in ${env.OTP_EXPIRY_MINUTES} minutes. If you didn't request this, ignore this email.`,
+  });
+
+export const sendEmailChangedOwnerAlert = (
+  to: string,
+  staffName: string,
+  oldEmail: string,
+  newEmail: string,
+): Promise<void> =>
+  sendEmail({
+    to,
+    subject: `${staffName} changed their email`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="margin: 0 0 16px;">Staff email changed</h2>
+        <p style="margin: 0 0 8px;">
+          <strong>${staffName}</strong> changed their account email from:
+        </p>
+        <p style="margin: 4px 0;">${oldEmail}</p>
+        <p style="margin: 4px 0 16px;">to:</p>
+        <p style="margin: 4px 0 16px;">${newEmail}</p>
+        <p style="color: #888; font-size: 13px; margin: 16px 0 0;">
+          This is an automatic notice from FinMind. No action is needed unless this is unexpected.
+        </p>
+      </div>
+    `,
+    text: `${staffName} changed their account email from ${oldEmail} to ${newEmail}.`,
+  });

@@ -57,6 +57,7 @@ enum EntryType {
 enum VerificationPurpose {
   email_verification
   password_reset
+  email_change
 }
 
 enum PaymentMethod {
@@ -200,6 +201,7 @@ model User {
   phoneNumber  String?
   passwordHash String
   role         UserRole
+  pendingEmail String?
   emailVerified Boolean @default(false)
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
