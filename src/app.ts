@@ -18,6 +18,7 @@ import reportsRoutes from '@/modules/reports/reports.routes';
 import ownerRoutes from '@/modules/owner/owner.routes';
 import businessRoutes from './modules/business/business.routes';
 import meRoutes from './modules/me/me.routes';
+import usersRoutes from './modules/users/users.routes';
 
 
 
@@ -71,6 +72,7 @@ app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/owner', ownerRoutes);
 app.use('/api/v1/business', businessRoutes);
 app.use('/api/v1/me', meRoutes);
+app.use('/api/v1/users', usersRoutes);
 
 
 app.use(errorHandler);

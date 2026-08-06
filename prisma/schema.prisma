@@ -161,6 +161,7 @@ model Business {
   locationDistrict   String
   recordingMode      RecordingMode
   tier               Tier
+  staffInvites       StaffInvite[]
   currency           String        @default("GHS")
   isActive           Boolean       @default(true)
   onboardingComplete Boolean       @default(false)
@@ -201,6 +202,7 @@ model User {
   phoneNumber  String?
   passwordHash String
   role         UserRole
+  roleTitle    String?
   pendingEmail String?
   emailVerified Boolean @default(false)
   isActive     Boolean   @default(true)
@@ -209,6 +211,7 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   business           Business          @relation(fields: [businessId], references: [id])
+  invitesSent        StaffInvite[]     @relation("InvitesSent")
   emailVerifications EmailVerification[]
   createdEntries     JournalEntry[]    @relation("CreatedBy")
   debtorPayments     DebtorPayment[]
@@ -262,6 +265,26 @@ model Account {
   @@unique([businessId, subtype])
   @@index([businessId])
   @@map("accounts")
+}
+
+model StaffInvite {
+  id          String     @id @default(uuid())
+  businessId  String
+  email       String
+  role        UserRole
+  roleTitle   String?
+  codeHash    String
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  business  Business @relation(fields: [businessId], references: [id])
+  invitedBy User     @relation("InvitesSent", fields: [invitedById], references: [id])
+
+  @@index([businessId])
+  @@index([email])
+  @@map("staff_invites")
 }
 
 // ─────────────── 4. journal_entries ───────────────

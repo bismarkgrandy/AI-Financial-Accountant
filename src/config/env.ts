@@ -29,6 +29,8 @@ const envSchema = z.object({
   MAX_OTP_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_RESEND_MAX: z.coerce.number().int().positive().default(3),
   OTP_RESEND_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+
+  INVITE_EXPIRY_HOURS: z.coerce.number().default(48),
 });
 
 const parsed = envSchema.safeParse(process.env);
