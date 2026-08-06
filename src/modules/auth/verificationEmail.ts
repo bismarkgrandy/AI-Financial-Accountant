@@ -74,3 +74,27 @@ export const sendEmailChangedOwnerAlert = (
     `,
     text: `${staffName} changed their account email from ${oldEmail} to ${newEmail}.`,
   });
+
+  export const sendStaffInviteEmail = (
+  to: string,
+  code: string,
+  businessName: string,
+  roleLabel: string,
+): Promise<void> =>
+  sendEmail({
+    to,
+    subject: `You've been invited to join ${businessName} on FinMind`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="margin: 0 0 16px;">You're invited</h2>
+        <p style="margin: 0 0 8px;">
+          You've been invited to join <strong>${businessName}</strong> on FinMind as a <strong>${roleLabel}</strong>.
+        </p>
+        <p style="margin: 0 0 8px;">Open the FinMind app, tap "I have an invite code," and enter:</p>
+        <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; margin: 8px 0 16px;">${code}</p>
+        <p style="margin: 0 0 8px;">This code expires in 48 hours.</p>
+        <p style="color: #888; font-size: 13px; margin: 16px 0 0;">If you weren't expecting this, you can safely ignore this email.</p>
+      </div>
+    `,
+    text: `You've been invited to join ${businessName} on FinMind as a ${roleLabel}. Open the app, tap "I have an invite code," and enter: ${code} (expires in 48 hours).`,
+  });
