@@ -27,5 +27,16 @@ export const listProductsSchema = z.object({
   isActive: z.enum(['true', 'false']).optional(),
 });
 
+export const importProductRowSchema = z.object({
+  name: z.string().trim().min(1, 'Product name is required'),
+  sellingPrice: z.coerce.number().positive('Selling price must be greater than 0'),
+  costPrice: z.coerce.number().min(0, 'Cost price cannot be negative'),
+  openingQty: z.coerce.number().min(0, 'Opening quantity cannot be negative').optional().default(0),
+  minimumStockQty: z.coerce.number().min(0).optional().default(0),
+  unitOfMeasure: z.string().trim().optional().default('piece'),
+  sku: z.string().trim().optional(),
+});
+
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+export type ImportProductRowInput = z.infer<typeof importProductRowSchema>;
