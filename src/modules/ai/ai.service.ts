@@ -1,3 +1,4 @@
+import prisma from '@/config/database';
 import axios from 'axios';
 import { AppError } from '@/middleware/errorHandler';
 import { env } from '@/config/env';
@@ -26,4 +27,50 @@ export const askAi = async (
     }
     throw new AppError('The AI assistant is currently unavailable.', 502);
   }
+};
+
+export const listConversations = async (userId: string, businessId: string) => {
+  return prisma.conversation.findMany({
+    where: { userId, businessId },
+    select: {
+      id: true, title: true, status: true, createdAt: true, updatedAt: true,
+      messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { content: true, role: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+};
+
+export const getConversation = async (userId: string, businessId: string, conversationId: string) => {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, userId, businessId },
+    include: { messages: { orderBy: { createdAt: 'asc' } } },
+  });
+  if (!conversation) throw new AppError('Conversation not found', 404);
+  return conversation;
+};
+
+export const updateConversation = async (
+  userId: string,
+  businessId: string,
+  conversationId: string,
+  input: { title?: string; status?: string },
+) => {
+  const existing = await prisma.conversation.findFirst({
+    where: { id: conversationId, userId, businessId },
+  });
+  if (!existing) throw new AppError('Conversation not found', 404);
+
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: input,
+  });
+};
+
+export const deleteConversation = async (userId: string, businessId: string, conversationId: string) => {
+  const existing = await prisma.conversation.findFirst({
+    where: { id: conversationId, userId, businessId },
+  });
+  if (!existing) throw new AppError('Conversation not found', 404);
+
+  await prisma.conversation.delete({ where: { id: conversationId } });
 };
