@@ -31,6 +31,10 @@ const envSchema = z.object({
   OTP_RESEND_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
 
   INVITE_EXPIRY_HOURS: z.coerce.number().default(48),
+
+  INTERNAL_AI_SERVICE_KEY: z.string().min(32),
+  AI_SERVICE_URL: z.string().url(),
+  AI_SERVICE_TIMEOUT_MS: z.coerce.number().default(15000),
 });
 
 const parsed = envSchema.safeParse(process.env);
