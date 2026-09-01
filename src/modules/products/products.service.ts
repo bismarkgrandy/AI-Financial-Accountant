@@ -6,11 +6,20 @@ import { importProductRowSchema } from './products.schemas';
 
 const MAX_IMPORT_ROWS = 500;
 
+const normalizeSku = (value?: string | null) => {
+  if (value === undefined || value === null) return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 export const createProduct = async (
   businessId: string,
   userId: string,
   input: CreateProductInput,
 ) => {
+  const skuValue = normalizeSku(input.sku);
+
   if (input.categoryId) {
     const category = await prisma.productCategory.findFirst({
       where: { id: input.categoryId, businessId },
@@ -20,13 +29,13 @@ export const createProduct = async (
     }
   }
 
-  if (input.sku && input.sku.trim().length > 0) {
+  if (skuValue) {
     const existing = await prisma.product.findFirst({
-      where: { businessId, sku: input.sku.trim() },
+      where: { businessId, sku: skuValue },
     });
     if (existing) {
       throw new AppError(
-        `A product with SKU "${input.sku.trim()}" already exists: ${existing.name}. ` +
+        `A product with SKU "${skuValue}" already exists: ${existing.name}. ` +
           `You can restock it instead of creating a new product.`,
         409,
       );
@@ -44,7 +53,7 @@ export const createProduct = async (
         currentStockQty: input.openingQty,
         minimumStockQty: input.minimumStockQty,
         unitOfMeasure: input.unitOfMeasure,
-        sku: input.sku?.trim() ?? null,
+        sku: skuValue,
         categoryId: input.categoryId ?? null,
       },
     });
@@ -117,17 +126,20 @@ export const updateProduct = async (
     }
   }
 
-  if (input.sku && input.sku.trim().length > 0) {
+  const normalizedSku =
+    input.sku === undefined ? undefined : normalizeSku(input.sku);
+
+  if (normalizedSku) {
     const duplicate = await prisma.product.findFirst({
       where: {
         businessId,
-        sku: input.sku.trim(),
+        sku: normalizedSku,
         id: { not: productId },
       },
     });
     if (duplicate) {
       throw new AppError(
-        `A product with SKU "${input.sku.trim()}" already exists: ${duplicate.name}.`,
+        `A product with SKU "${normalizedSku}" already exists: ${duplicate.name}.`,
         409,
       );
     }
@@ -138,12 +150,20 @@ export const updateProduct = async (
       where: { id: productId },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.sellingPrice !== undefined ? { sellingPrice: input.sellingPrice } : {}),
-        ...(input.minimumStockQty !== undefined ? { minimumStockQty: input.minimumStockQty } : {}),
-        ...(input.unitOfMeasure !== undefined ? { unitOfMeasure: input.unitOfMeasure } : {}),
-        ...(input.sku !== undefined ? { sku: input.sku?.trim() ?? null } : {}),
+        ...(input.sellingPrice !== undefined
+          ? { sellingPrice: input.sellingPrice }
+          : {}),
+        ...(input.minimumStockQty !== undefined
+          ? { minimumStockQty: input.minimumStockQty }
+          : {}),
+        ...(input.unitOfMeasure !== undefined
+          ? { unitOfMeasure: input.unitOfMeasure }
+          : {}),
+        ...(input.sku !== undefined ? { sku: normalizedSku } : {}),
         ...(input.barcode !== undefined ? { barcode: input.barcode } : {}),
-        ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+        ...(input.categoryId !== undefined
+          ? { categoryId: input.categoryId }
+          : {}),
       },
     });
 
@@ -185,7 +205,10 @@ export const importProducts = async (
   rows: Record<string, string>[],
 ) => {
   if (rows.length > MAX_IMPORT_ROWS) {
-    throw new AppError(`Import file has too many rows (max ${MAX_IMPORT_ROWS} per upload)`, 400);
+    throw new AppError(
+      `Import file has too many rows (max ${MAX_IMPORT_ROWS} per upload)`,
+      400,
+    );
   }
 
   const results = {
@@ -195,7 +218,7 @@ export const importProducts = async (
   };
 
   for (let i = 0; i < rows.length; i++) {
-    const rowNumber = i + 2; 
+    const rowNumber = i + 2;
 
     const parsed = importProductRowSchema.safeParse(rows[i]);
     if (!parsed.success) {
@@ -212,7 +235,10 @@ export const importProducts = async (
     // This is stricter than single-create (which only checks SKU) —
     // deliberate, since bulk rows are far more likely to contain
     // accidental repeats.
-    const normalizedName = parsed.data.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    const normalizedName = parsed.data.name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
 
     const existingByName = await prisma.product.findFirst({
       where: {
@@ -248,7 +274,10 @@ export const importProducts = async (
       results.errors.push({
         row: rowNumber,
         name: parsed.data.name,
-        reason: error instanceof AppError ? error.message : 'Could not save this product',
+        reason:
+          error instanceof AppError
+            ? error.message
+            : 'Could not save this product',
       });
     }
   }
