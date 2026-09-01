@@ -5,10 +5,23 @@ const saleItemSchema = z.object({
   quantity: z.number().positive('Quantity must be greater than 0'),
 });
 
+export const listSalesSchema = z.object({
+  search: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+
 export const createSaleSchema = z
   .object({
     paymentMethod: z.enum([
-      'cash', 'mtn_momo', 'telecel', 'airtel', 'bank', 'credit',
+      'cash',
+      'mtn_momo',
+      'telecel',
+      'airtel',
+      'bank',
+      'credit',
     ]),
     items: z.array(saleItemSchema).min(1, 'A sale must have at least one item'),
 
@@ -17,7 +30,6 @@ export const createSaleSchema = z
     customerName: z.string().optional(),
     customerPhone: z.string().optional(),
     dueDate: z.string().optional(),
-
   })
   .refine(
     (data) => {
@@ -25,7 +37,8 @@ export const createSaleSchema = z
       // either an existing debtorId OR a customerName for a new one.
       if (data.paymentMethod === 'credit') {
         const hasExisting = !!data.debtorId;
-        const hasNew = !!data.customerName && data.customerName.trim().length > 0;
+        const hasNew =
+          !!data.customerName && data.customerName.trim().length > 0;
         return hasExisting || hasNew;
       }
       return true;
@@ -38,3 +51,4 @@ export const createSaleSchema = z
   );
 
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
+export type ListSalesQuery = z.infer<typeof listSalesSchema>;

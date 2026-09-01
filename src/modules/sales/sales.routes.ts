@@ -10,6 +10,8 @@ router.use(authenticate);
 router.use(requireVerified);
 router.use(requireOnboarding); // sales need onboarding done
 
+router.get('/', salesController.listSales);
+
 // Any authenticated user (cashier/manager/owner) can record a sale
 router.post('/', salesController.createSale);
 

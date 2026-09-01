@@ -1,6 +1,10 @@
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { findAccountBySubtype, findPaymentAccount } from '@/utils/accountFinder';
+import { createAuditLog } from '@/modules/audit/audit.service';
+import {
+  findAccountBySubtype,
+  findPaymentAccount,
+} from '@/utils/accountFinder';
 import { generateReferenceNumber } from '@/utils/referenceNumber';
 
 export interface CreditorPaymentInput {
@@ -53,7 +57,11 @@ export const postCreditorPayment = async (
 
     // ── 3. Allocate the payment across payables (FIFO) ──
     let remaining = input.amount;
-    const payableUpdates: { id: string; newOutstanding: number; newStatus: string }[] = [];
+    const payableUpdates: {
+      id: string;
+      newOutstanding: number;
+      newStatus: string;
+    }[] = [];
 
     for (const payable of openPayables) {
       if (remaining <= 0) break;
@@ -71,7 +79,11 @@ export const postCreditorPayment = async (
     }
 
     // ── 4. Create the journal entry header ──
-    const reference = await generateReferenceNumber(tx, businessId, 'creditor_payment');
+    const reference = await generateReferenceNumber(
+      tx,
+      businessId,
+      'creditor_payment',
+    );
     const entry = await tx.journalEntry.create({
       data: {
         businessId,
@@ -87,18 +99,34 @@ export const postCreditorPayment = async (
 
     // ── 5. Journal lines — Creditors DOWN, money OUT ──
     // (the OPPOSITE of a debtor payment: you're paying out, not receiving)
-    const creditorsAccount = await findAccountBySubtype(tx, businessId, 'creditors');
-    const moneyAccount = await findPaymentAccount(tx, businessId, input.paymentMethod);
+    const creditorsAccount = await findAccountBySubtype(
+      tx,
+      businessId,
+      'creditors',
+    );
+    const moneyAccount = await findPaymentAccount(
+      tx,
+      businessId,
+      input.paymentMethod,
+    );
 
     await tx.journalLine.createMany({
       data: [
         {
-          businessId, entryId: entry.id, accountId: creditorsAccount.id,
-          debit: input.amount, credit: 0, memo: 'Reduction in amount owed to supplier',
+          businessId,
+          entryId: entry.id,
+          accountId: creditorsAccount.id,
+          debit: input.amount,
+          credit: 0,
+          memo: 'Reduction in amount owed to supplier',
         },
         {
-          businessId, entryId: entry.id, accountId: moneyAccount.id,
-          debit: 0, credit: input.amount, memo: 'Payment made to supplier',
+          businessId,
+          entryId: entry.id,
+          accountId: moneyAccount.id,
+          debit: 0,
+          credit: input.amount,
+          memo: 'Payment made to supplier',
         },
       ],
     });
@@ -130,11 +158,31 @@ export const postCreditorPayment = async (
 
     const newTotalOwed = totalOwed - input.amount;
 
+    await createAuditLog(tx, {
+      businessId,
+      actorId: userId,
+      entity: 'creditor_payment',
+      entityId: creditorId,
+      action: 'created',
+      referenceNumber: entry.referenceNumber,
+      summary: `Employee paid supplier ${creditor.name} an amount of ${input.amount}`,
+      details: {
+        creditorName: creditor.name,
+        amountPaid: input.amount,
+        paymentMethod: input.paymentMethod,
+        payablesAffected: payableUpdates.length,
+        payablesClearedCount: payableUpdates.filter(
+          (p) => p.newStatus === 'paid',
+        ).length,
+      },
+    });
+
     return {
       referenceNumber: entry.referenceNumber,
       amountPaid: input.amount,
       payablesAffected: payableUpdates.length,
-      payablesClearedCount: payableUpdates.filter((p) => p.newStatus === 'paid').length,
+      payablesClearedCount: payableUpdates.filter((p) => p.newStatus === 'paid')
+        .length,
       remainingOwed: newTotalOwed,
     };
   });

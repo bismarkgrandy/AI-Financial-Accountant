@@ -1,8 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types/request';
 import * as salesService from './sales.service';
-import { createSaleSchema } from './sales.schemas';
-import { sendCreated } from '@/utils/response';
+import { createSaleSchema, listSalesSchema } from './sales.schemas';
+import { sendCreated, sendSuccess } from '@/utils/response';
+
+export const listSales = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { businessId } = req as AuthRequest;
+    const filters = listSalesSchema.parse(req.query);
+    const result = await salesService.listSales(businessId, filters);
+    sendSuccess(res, result, 200, 'Sales retrieved');
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const createSale = async (
   req: Request,

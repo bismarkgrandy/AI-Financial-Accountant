@@ -1,6 +1,10 @@
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { findAccountBySubtype, findPaymentAccount } from '@/utils/accountFinder';
+import { createAuditLog } from '@/modules/audit/audit.service';
+import {
+  findAccountBySubtype,
+  findPaymentAccount,
+} from '@/utils/accountFinder';
 import { generateReferenceNumber } from '@/utils/referenceNumber';
 
 export interface DebtorPaymentInput {
@@ -53,7 +57,11 @@ export const postDebtorPayment = async (
 
     // ── 3. Allocate the payment across debts (FIFO) ──
     let remaining = input.amount;
-    const debtUpdates: { id: string; newOutstanding: number; newStatus: string }[] = [];
+    const debtUpdates: {
+      id: string;
+      newOutstanding: number;
+      newStatus: string;
+    }[] = [];
 
     for (const debt of openDebts) {
       if (remaining <= 0) break;
@@ -71,7 +79,11 @@ export const postDebtorPayment = async (
     }
 
     // ── 4. Create the journal entry header ──
-    const reference = await generateReferenceNumber(tx, businessId, 'debtor_payment');
+    const reference = await generateReferenceNumber(
+      tx,
+      businessId,
+      'debtor_payment',
+    );
     const entry = await tx.journalEntry.create({
       data: {
         businessId,
@@ -86,18 +98,34 @@ export const postDebtorPayment = async (
     });
 
     // ── 5. Journal lines — money IN, Debtors DOWN ──
-    const moneyAccount = await findPaymentAccount(tx, businessId, input.paymentMethod);
-    const debtorsAccount = await findAccountBySubtype(tx, businessId, 'debtors');
+    const moneyAccount = await findPaymentAccount(
+      tx,
+      businessId,
+      input.paymentMethod,
+    );
+    const debtorsAccount = await findAccountBySubtype(
+      tx,
+      businessId,
+      'debtors',
+    );
 
     await tx.journalLine.createMany({
       data: [
         {
-          businessId, entryId: entry.id, accountId: moneyAccount.id,
-          debit: input.amount, credit: 0, memo: 'Payment received from customer',
+          businessId,
+          entryId: entry.id,
+          accountId: moneyAccount.id,
+          debit: input.amount,
+          credit: 0,
+          memo: 'Payment received from customer',
         },
         {
-          businessId, entryId: entry.id, accountId: debtorsAccount.id,
-          debit: 0, credit: input.amount, memo: 'Reduction in amount owed',
+          businessId,
+          entryId: entry.id,
+          accountId: debtorsAccount.id,
+          debit: 0,
+          credit: input.amount,
+          memo: 'Reduction in amount owed',
         },
       ],
     });
@@ -129,11 +157,30 @@ export const postDebtorPayment = async (
 
     const newTotalOwed = totalOwed - input.amount;
 
+    await createAuditLog(tx, {
+      businessId,
+      actorId: userId,
+      entity: 'debtor_payment',
+      entityId: debtorId,
+      action: 'created',
+      referenceNumber: entry.referenceNumber,
+      summary: `Employee recorded payment from customer ${debtor.name} of amount ${input.amount}`,
+      details: {
+        debtorName: debtor.name,
+        amountPaid: input.amount,
+        paymentMethod: input.paymentMethod,
+        debtsAffected: debtUpdates.length,
+        debtsClearedCount: debtUpdates.filter((d) => d.newStatus === 'paid')
+          .length,
+      },
+    });
+
     return {
       referenceNumber: entry.referenceNumber,
       amountPaid: input.amount,
       debtsAffected: debtUpdates.length,
-      debtsClearedCount: debtUpdates.filter((d) => d.newStatus === 'paid').length,
+      debtsClearedCount: debtUpdates.filter((d) => d.newStatus === 'paid')
+        .length,
       remainingOwed: newTotalOwed,
     };
   });
