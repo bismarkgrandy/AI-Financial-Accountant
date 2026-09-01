@@ -223,7 +223,8 @@ model User {
   syncQueue          SyncQueue[]
   refreshTokens      RefreshToken[]
   sales              Sale[]
-  conversations Conversation[]
+  conversations      Conversation[]
+  auditLogs          AuditLog[]
 
   @@index([businessId])
   @@map("users")
@@ -320,6 +321,25 @@ model JournalEntry {
   @@index([businessId, entryDate])
   @@index([businessId, entryType])
   @@map("journal_entries")
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  businessId      String
+  actorId         String?
+  entity          String
+  entityId        String
+  action          String
+  referenceNumber String?
+  summary         String
+  details         Json?
+  createdAt       DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([businessId, entity, entityId])
+  @@map("audit_logs")
 }
 
 // ─────────────── 5. journal_lines ───────────────

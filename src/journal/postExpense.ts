@@ -1,8 +1,11 @@
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { findAccountBySubtype, findPaymentAccount } from '@/utils/accountFinder';
+import { createAuditLog } from '@/modules/audit/audit.service';
+import {
+  findAccountBySubtype,
+  findPaymentAccount,
+} from '@/utils/accountFinder';
 import { generateReferenceNumber } from '@/utils/referenceNumber';
-
 
 export const EXPENSE_CATEGORIES = [
   'rent',
@@ -42,9 +45,17 @@ export const postExpense = async (
   }
 
   return prisma.$transaction(async (tx) => {
-    const expenseAccount = await findAccountBySubtype(tx, businessId, input.category);
+    const expenseAccount = await findAccountBySubtype(
+      tx,
+      businessId,
+      input.category,
+    );
 
-    const moneyAccount = await findPaymentAccount(tx, businessId, input.paymentMethod);
+    const moneyAccount = await findPaymentAccount(
+      tx,
+      businessId,
+      input.paymentMethod,
+    );
 
     const description = input.paidTo
       ? `${input.category} expense — paid to ${input.paidTo}`
@@ -67,13 +78,19 @@ export const postExpense = async (
     await tx.journalLine.createMany({
       data: [
         {
-          businessId, entryId: entry.id, accountId: expenseAccount.id,
-          debit: input.amount, credit: 0,
+          businessId,
+          entryId: entry.id,
+          accountId: expenseAccount.id,
+          debit: input.amount,
+          credit: 0,
           memo: `${expenseAccount.name}`,
         },
         {
-          businessId, entryId: entry.id, accountId: moneyAccount.id,
-          debit: 0, credit: input.amount,
+          businessId,
+          entryId: entry.id,
+          accountId: moneyAccount.id,
+          debit: 0,
+          credit: input.amount,
           memo: 'Payment made',
         },
       ],
@@ -86,9 +103,25 @@ export const postExpense = async (
         expenseAccountId: expenseAccount.id,
         amount: input.amount,
         paymentMethod: input.paymentMethod as never,
-        paidTo: input.paidTo ?? null,   // user-filled
-        notes: input.notes ?? null,     // user-filled
+        paidTo: input.paidTo ?? null, // user-filled
+        notes: input.notes ?? null, // user-filled
         createdById: userId,
+      },
+    });
+
+    await createAuditLog(tx, {
+      businessId,
+      actorId: userId,
+      entity: 'expense',
+      entityId: expense.id,
+      action: 'created',
+      referenceNumber: entry.referenceNumber,
+      summary: `Employee recorded ${input.category} expense of ${input.amount}`,
+      details: {
+        category: input.category,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        paidTo: input.paidTo ?? null,
       },
     });
 

@@ -1,7 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { findAccountBySubtype, findPaymentAccount } from '@/utils/accountFinder';
+import { createAuditLog } from '@/modules/audit/audit.service';
+import {
+  findAccountBySubtype,
+  findPaymentAccount,
+} from '@/utils/accountFinder';
 import { generateReferenceNumber } from '@/utils/referenceNumber';
 
 export interface PurchaseItemInput {
@@ -46,7 +50,10 @@ export const postPurchase = async (
       where: { id: { in: productIds }, businessId, isActive: true },
     });
     if (products.length !== productIds.length) {
-      throw new AppError('One or more products were not found or are inactive', 404);
+      throw new AppError(
+        'One or more products were not found or are inactive',
+        404,
+      );
     }
     const productMap = new Map(products.map((p) => [p.id, p]));
 
@@ -75,9 +82,7 @@ export const postPurchase = async (
       // newAvgCost = (oldQty×oldCost + buyQty×buyCost) / (oldQty + buyQty)
       const newQty = oldQty + buyQty;
       const newAvgCost =
-        newQty > 0
-          ? (oldQty * oldCost + buyQty * buyCost) / newQty
-          : buyCost;
+        newQty > 0 ? (oldQty * oldCost + buyQty * buyCost) / newQty : buyCost;
 
       productUpdates.push({
         id: product.id,
@@ -122,7 +127,11 @@ export const postPurchase = async (
     }
 
     // ── 4. Create the journal entry header ──
-    const reference = await generateReferenceNumber(tx, businessId, 'stock_purchase');
+    const reference = await generateReferenceNumber(
+      tx,
+      businessId,
+      'stock_purchase',
+    );
     const entry = await tx.journalEntry.create({
       data: {
         businessId,
@@ -146,12 +155,19 @@ export const postPurchase = async (
     await tx.journalLine.createMany({
       data: [
         {
-          businessId, entryId: entry.id, accountId: stockAccount.id,
-          debit: totalPurchaseValue, credit: 0, memo: 'Stock purchased',
+          businessId,
+          entryId: entry.id,
+          accountId: stockAccount.id,
+          debit: totalPurchaseValue,
+          credit: 0,
+          memo: 'Stock purchased',
         },
         {
-          businessId, entryId: entry.id, accountId: moneyAccount.id,
-          debit: 0, credit: totalPurchaseValue,
+          businessId,
+          entryId: entry.id,
+          accountId: moneyAccount.id,
+          debit: 0,
+          credit: totalPurchaseValue,
           memo: isCredit ? 'Amount owed to supplier' : 'Payment made',
         },
       ],
@@ -159,7 +175,10 @@ export const postPurchase = async (
 
     // ── 6. Create stock_purchase_items ──
     await tx.stockPurchaseItem.createMany({
-      data: purchaseItemsData.map((pi) => ({ ...pi, journalEntryId: entry.id })),
+      data: purchaseItemsData.map((pi) => ({
+        ...pi,
+        journalEntryId: entry.id,
+      })),
     });
 
     // ── 7. Update each product: stock UP, weighted-avg cost, last cost ──
@@ -168,8 +187,8 @@ export const postPurchase = async (
         where: { id: u.id },
         data: {
           currentStockQty: u.newQty,
-          costPrice: u.newAvgCost,       // weighted average (drives COGS/profit)
-          lastPurchaseCost: u.lastCost,  // most recent cost (display for pricing)
+          costPrice: u.newAvgCost, // weighted average (drives COGS/profit)
+          lastPurchaseCost: u.lastCost, // most recent cost (display for pricing)
         },
       });
     }
@@ -189,6 +208,23 @@ export const postPurchase = async (
         },
       });
     }
+
+    await createAuditLog(tx, {
+      businessId,
+      actorId: userId,
+      entity: 'stock_purchase',
+      entityId: entry.id,
+      action: 'created',
+      referenceNumber: entry.referenceNumber,
+      summary: `Employee recorded stock purchase of ${input.items.length} item(s) for ${totalPurchaseValue}`,
+      details: {
+        itemCount: input.items.length,
+        totalPurchaseValue,
+        paymentMethod: input.paymentMethod,
+        isCredit,
+        creditorId,
+      },
+    });
 
     return {
       referenceNumber: entry.referenceNumber,

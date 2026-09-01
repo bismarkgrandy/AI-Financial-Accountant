@@ -20,8 +20,8 @@ import businessRoutes from './modules/business/business.routes';
 import meRoutes from './modules/me/me.routes';
 import usersRoutes from './modules/users/users.routes';
 import aiRoutes from '@/modules/ai/ai.routes';
+import auditRoutes from '@/modules/audit/audit.routes';
 import internalRoutes from '@/routes/internal.routes';
-
 
 const app = express();
 
@@ -60,7 +60,6 @@ app.get('/health', (_req, res) => {
   });
 });
 
-
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/products', productsRoutes);
@@ -75,6 +74,7 @@ app.use('/api/v1/business', businessRoutes);
 app.use('/api/v1/me', meRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/audit', auditRoutes);
 app.use('/internal', internalRoutes);
 
 app.use(errorHandler);

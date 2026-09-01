@@ -1,7 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { findAccountBySubtype, findPaymentAccount } from '@/utils/accountFinder';
+import { createAuditLog } from '@/modules/audit/audit.service';
+import {
+  findAccountBySubtype,
+  findPaymentAccount,
+} from '@/utils/accountFinder';
 import { generateReferenceNumber } from '@/utils/referenceNumber';
 
 export interface SaleItemInput {
@@ -43,14 +47,20 @@ export const postSale = async (
       where: { id: { in: productIds }, businessId, isActive: true },
     });
     if (products.length !== productIds.length) {
-      throw new AppError('One or more products were not found or are inactive', 404);
+      throw new AppError(
+        'One or more products were not found or are inactive',
+        404,
+      );
     }
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     // 2. Calculate totals + check stock
     let totalRevenue = 0;
     let totalCogs = 0;
-    const saleItemsRaw: Omit<Prisma.SaleItemCreateManyInput, 'saleId' | 'journalEntryId'>[] = [];
+    const saleItemsRaw: Omit<
+      Prisma.SaleItemCreateManyInput,
+      'saleId' | 'journalEntryId'
+    >[] = [];
     const stockUpdates: { id: string; newQty: number }[] = [];
 
     for (const item of input.items) {
@@ -82,7 +92,10 @@ export const postSale = async (
         lineCogs,
         lineGrossProfit: lineTotal - lineCogs,
       });
-      stockUpdates.push({ id: product.id, newQty: currentStock - item.quantity });
+      stockUpdates.push({
+        id: product.id,
+        newQty: currentStock - item.quantity,
+      });
     }
 
     // 3. Resolve debtor (credit only)
@@ -131,10 +144,38 @@ export const postSale = async (
 
     await tx.journalLine.createMany({
       data: [
-        { businessId, entryId: entry.id, accountId: moneyAccount.id, debit: totalRevenue, credit: 0, memo: isCredit ? 'Amount owed by customer' : 'Payment received' },
-        { businessId, entryId: entry.id, accountId: salesAccount.id, debit: 0, credit: totalRevenue, memo: 'Sales revenue' },
-        { businessId, entryId: entry.id, accountId: cogsAccount.id, debit: totalCogs, credit: 0, memo: 'Cost of goods sold' },
-        { businessId, entryId: entry.id, accountId: stockAccount.id, debit: 0, credit: totalCogs, memo: 'Stock reduction' },
+        {
+          businessId,
+          entryId: entry.id,
+          accountId: moneyAccount.id,
+          debit: totalRevenue,
+          credit: 0,
+          memo: isCredit ? 'Amount owed by customer' : 'Payment received',
+        },
+        {
+          businessId,
+          entryId: entry.id,
+          accountId: salesAccount.id,
+          debit: 0,
+          credit: totalRevenue,
+          memo: 'Sales revenue',
+        },
+        {
+          businessId,
+          entryId: entry.id,
+          accountId: cogsAccount.id,
+          debit: totalCogs,
+          credit: 0,
+          memo: 'Cost of goods sold',
+        },
+        {
+          businessId,
+          entryId: entry.id,
+          accountId: stockAccount.id,
+          debit: 0,
+          credit: totalCogs,
+          memo: 'Stock reduction',
+        },
       ],
     });
 
@@ -184,6 +225,24 @@ export const postSale = async (
         },
       });
     }
+
+    await createAuditLog(tx, {
+      businessId,
+      actorId: userId,
+      entity: 'sale',
+      entityId: sale.id,
+      action: 'created',
+      referenceNumber: reference,
+      summary: `Employee created sale ${reference}`,
+      details: {
+        paymentMethod: input.paymentMethod,
+        totalRevenue,
+        totalCogs,
+        grossProfit: totalRevenue - totalCogs,
+        isCredit,
+        itemCount: input.items.length,
+      },
+    });
 
     return {
       entry,
