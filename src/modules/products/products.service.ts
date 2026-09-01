@@ -2,13 +2,24 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
 import { CreateProductInput, UpdateProductInput } from './products.schemas';
+import { importProductRowSchema } from './products.schemas';
+
+const MAX_IMPORT_ROWS = 500;
+
+const normalizeSku = (value?: string | null) => {
+  if (value === undefined || value === null) return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 export const createProduct = async (
   businessId: string,
   userId: string,
   input: CreateProductInput,
 ) => {
-  // If a category is given, verify it belongs to THIS business
+  const skuValue = normalizeSku(input.sku);
+
   if (input.categoryId) {
     const category = await prisma.productCategory.findFirst({
       where: { id: input.categoryId, businessId },
@@ -18,23 +29,19 @@ export const createProduct = async (
     }
   }
 
-  // ── Layer 1: Pre-check — friendly duplicate-SKU response ──
-  // Only runs when an SKU is provided. Returns the existing product
-  // so the frontend can offer "restock this one instead".
-  if (input.sku && input.sku.trim().length > 0) {
+  if (skuValue) {
     const existing = await prisma.product.findFirst({
-      where: { businessId, sku: input.sku.trim() },
+      where: { businessId, sku: skuValue },
     });
     if (existing) {
       throw new AppError(
-        `A product with SKU "${input.sku.trim()}" already exists: ${existing.name}. ` +
+        `A product with SKU "${skuValue}" already exists: ${existing.name}. ` +
           `You can restock it instead of creating a new product.`,
         409,
       );
     }
   }
 
-  // ── Create, with Layer 2: constraint backstop (catches races) ──
   try {
     const product = await prisma.product.create({
       data: {
@@ -43,26 +50,21 @@ export const createProduct = async (
         name: input.name,
         sellingPrice: input.sellingPrice,
         costPrice: input.costPrice,
-        currentStockQty: input.openingQty, // opening qty becomes current stock
+        currentStockQty: input.openingQty,
         minimumStockQty: input.minimumStockQty,
         unitOfMeasure: input.unitOfMeasure,
-        sku: input.sku?.trim() ?? null,
+        sku: skuValue,
         categoryId: input.categoryId ?? null,
       },
     });
 
     return product;
   } catch (error) {
-    // The DB unique constraint caught a duplicate the pre-check missed
-    // (e.g. two concurrent requests racing on the same SKU)
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      throw new AppError(
-        'A product with this SKU already exists.',
-        409,
-      );
+      throw new AppError('A product with this SKU already exists.', 409);
     }
     throw error;
   }
@@ -75,12 +77,10 @@ export const listProducts = async (
   const products = await prisma.product.findMany({
     where: {
       businessId,
-      // search by name (case-insensitive contains)
       ...(filters.search
         ? { name: { contains: filters.search, mode: 'insensitive' } }
         : {}),
       ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
-      // default to active only, unless explicitly asked otherwise
       ...(filters.isActive === 'false'
         ? { isActive: false }
         : filters.isActive === undefined
@@ -110,7 +110,6 @@ export const updateProduct = async (
   productId: string,
   input: UpdateProductInput,
 ) => {
-  // Confirm the product exists and belongs to this business
   const existing = await prisma.product.findFirst({
     where: { id: productId, businessId },
   });
@@ -118,7 +117,6 @@ export const updateProduct = async (
     throw new AppError('Product not found', 404);
   }
 
-  // If changing category, verify it belongs to this business
   if (input.categoryId) {
     const category = await prisma.productCategory.findFirst({
       where: { id: input.categoryId, businessId },
@@ -128,56 +126,54 @@ export const updateProduct = async (
     }
   }
 
-  // ── Pre-check: friendly duplicate-SKU response (only if sku is changing) ──
-  // Skip the product itself — changing other fields while keeping the same
-  // sku must not flag a false duplicate.
-  if (input.sku && input.sku.trim().length > 0) {
+  const normalizedSku =
+    input.sku === undefined ? undefined : normalizeSku(input.sku);
+
+  if (normalizedSku) {
     const duplicate = await prisma.product.findFirst({
       where: {
         businessId,
-        sku: input.sku.trim(),
-        id: { not: productId }, // exclude this product
+        sku: normalizedSku,
+        id: { not: productId },
       },
     });
     if (duplicate) {
       throw new AppError(
-        `A product with SKU "${input.sku.trim()}" already exists: ${duplicate.name}.`,
+        `A product with SKU "${normalizedSku}" already exists: ${duplicate.name}.`,
         409,
       );
     }
   }
 
-  // ── Update, with the constraint backstop (catches races) ──
   try {
     const product = await prisma.product.update({
       where: { id: productId },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.sellingPrice !== undefined ? { sellingPrice: input.sellingPrice } : {}),
-        // costPrice intentionally NOT editable here — it's the weighted
-        // average maintained by purchases. Changing it requires a
-        // purchase (or a future cost/stock adjustment with a journal
-        // entry), never a plain edit, to keep the Stock account in sync.
-        ...(input.minimumStockQty !== undefined ? { minimumStockQty: input.minimumStockQty } : {}),
-        ...(input.unitOfMeasure !== undefined ? { unitOfMeasure: input.unitOfMeasure } : {}),
-        ...(input.sku !== undefined ? { sku: input.sku?.trim() ?? null } : {}),
+        ...(input.sellingPrice !== undefined
+          ? { sellingPrice: input.sellingPrice }
+          : {}),
+        ...(input.minimumStockQty !== undefined
+          ? { minimumStockQty: input.minimumStockQty }
+          : {}),
+        ...(input.unitOfMeasure !== undefined
+          ? { unitOfMeasure: input.unitOfMeasure }
+          : {}),
+        ...(input.sku !== undefined ? { sku: normalizedSku } : {}),
         ...(input.barcode !== undefined ? { barcode: input.barcode } : {}),
-        ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+        ...(input.categoryId !== undefined
+          ? { categoryId: input.categoryId }
+          : {}),
       },
     });
 
     return product;
   } catch (error) {
-    // DB unique constraint caught a duplicate the pre-check missed
-    // (e.g. a concurrent request that changed another product to this sku)
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      throw new AppError(
-        'A product with this SKU already exists.',
-        409,
-      );
+      throw new AppError('A product with this SKU already exists.', 409);
     }
     throw error;
   }
@@ -194,11 +190,97 @@ export const deactivateProduct = async (
     throw new AppError('Product not found', 404);
   }
 
-  // Soft delete — never hard delete (sales history references it)
   const product = await prisma.product.update({
     where: { id: productId },
     data: { isActive: false },
   });
 
   return product;
+};
+
+// NEW — bulk import from a parsed CSV
+export const importProducts = async (
+  businessId: string,
+  userId: string,
+  rows: Record<string, string>[],
+) => {
+  if (rows.length > MAX_IMPORT_ROWS) {
+    throw new AppError(
+      `Import file has too many rows (max ${MAX_IMPORT_ROWS} per upload)`,
+      400,
+    );
+  }
+
+  const results = {
+    created: 0,
+    failed: 0,
+    errors: [] as { row: number; name?: string; reason: string }[],
+  };
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNumber = i + 2;
+
+    const parsed = importProductRowSchema.safeParse(rows[i]);
+    if (!parsed.success) {
+      results.failed++;
+      results.errors.push({
+        row: rowNumber,
+        name: rows[i].name,
+        reason: parsed.error.issues[0]?.message ?? 'Invalid row',
+      });
+      continue;
+    }
+
+    // Name-duplicate check — normalized, case/whitespace-insensitive.
+    // This is stricter than single-create (which only checks SKU) —
+    // deliberate, since bulk rows are far more likely to contain
+    // accidental repeats.
+    const normalizedName = parsed.data.name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+
+    const existingByName = await prisma.product.findFirst({
+      where: {
+        businessId,
+        isActive: true,
+        name: { equals: normalizedName, mode: 'insensitive' },
+      },
+    });
+
+    if (existingByName) {
+      results.failed++;
+      results.errors.push({
+        row: rowNumber,
+        name: parsed.data.name,
+        reason: `A product named "${existingByName.name}" already exists. Use restock instead, or rename this row if it's a different product.`,
+      });
+      continue;
+    }
+
+    try {
+      await createProduct(businessId, userId, {
+        name: parsed.data.name,
+        sellingPrice: parsed.data.sellingPrice,
+        costPrice: parsed.data.costPrice,
+        openingQty: parsed.data.openingQty,
+        minimumStockQty: parsed.data.minimumStockQty,
+        unitOfMeasure: parsed.data.unitOfMeasure,
+        sku: parsed.data.sku,
+      });
+      results.created++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        row: rowNumber,
+        name: parsed.data.name,
+        reason:
+          error instanceof AppError
+            ? error.message
+            : 'Could not save this product',
+      });
+    }
+  }
+
+  return results;
 };
