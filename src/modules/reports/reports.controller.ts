@@ -45,3 +45,14 @@ export const getCreditorsSummary = async (req: Request, res: Response, next: Nex
     next(error);
   }
 };
+
+export const getTrialBalance = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { businessId } = req as AuthRequest;
+    const { asOf } = req.query;
+    const result = await reportsService.getTrialBalance(businessId, asOf as string | undefined);
+    sendSuccess(res, result, 200);
+  } catch (error) {
+    next(error);
+  }
+};
