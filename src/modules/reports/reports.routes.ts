@@ -13,5 +13,6 @@ router.get('/profit-loss', requireOnboarding, reportsController.getProfitLoss);
 router.get('/cash-position', requireOnboarding, reportsController.getCashPosition);
 router.get('/debtors-summary', requireOnboarding, reportsController.getDebtorsSummary);
 router.get('/creditors-summary', requireOnboarding, reportsController.getCreditorsSummary);
+router.get('/trial-balance', reportsController.getTrialBalance);
 
 export default router;

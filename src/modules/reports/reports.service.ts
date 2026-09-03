@@ -314,3 +314,56 @@ export const getCreditorsSummary = async (businessId: string) => {
     creditors: items,
   };
 };
+
+export const getTrialBalance = async (businessId: string, asOf?: string) => {
+  const asOfDate = asOf ? new Date(asOf) : new Date();
+
+  const accounts = await prisma.account.findMany({
+    where: { businessId, isActive: true },
+    orderBy: { code: 'asc' },
+  });
+
+  const lines = [];
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  for (const account of accounts) {
+    const aggregates = await prisma.journalLine.aggregate({
+      where: {
+        accountId: account.id,
+        entry: { entryDate: { lte: asOfDate } }, // relies on JournalEntry.entryDate — confirm field name
+      },
+      _sum: { debit: true, credit: true },
+    });
+
+    const debitSum = Number(aggregates._sum.debit ?? 0);
+    const creditSum = Number(aggregates._sum.credit ?? 0);
+    const net = debitSum - creditSum;
+
+    // Skip accounts with zero activity — keeps the report readable
+    if (net === 0) continue;
+
+    const isDebitNormal = account.normalBalance === 'debit';
+    const debitColumn = isDebitNormal ? Math.max(net, 0) : Math.max(-net, 0);
+    const creditColumn = isDebitNormal ? Math.max(-net, 0) : Math.max(net, 0);
+
+    lines.push({
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      debit: debitColumn,
+      credit: creditColumn,
+    });
+
+    totalDebit += debitColumn;
+    totalCredit += creditColumn;
+  }
+
+  return {
+    asOf: asOfDate.toISOString().split('T')[0],
+    accounts: lines,
+    totalDebit: Number(totalDebit.toFixed(2)),
+    totalCredit: Number(totalCredit.toFixed(2)),
+    isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
+  };
+};
