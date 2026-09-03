@@ -331,30 +331,30 @@ export const getTrialBalance = async (businessId: string, asOf?: string) => {
     const aggregates = await prisma.journalLine.aggregate({
       where: {
         accountId: account.id,
-        entry: { entryDate: { lte: asOfDate } }, // relies on JournalEntry.entryDate — confirm field name
+        entry: { entryDate: { lte: asOfDate } },
       },
       _sum: { debit: true, credit: true },
     });
 
     const debitSum = Number(aggregates._sum.debit ?? 0);
     const creditSum = Number(aggregates._sum.credit ?? 0);
-    const net = debitSum - creditSum;
 
-    // Skip accounts with zero activity — keeps the report readable
-    if (net === 0) continue;
+    if (debitSum === 0 && creditSum === 0) continue;
 
-    const isDebitNormal = account.normalBalance === 'debit';
-    const debitColumn = isDebitNormal ? Math.max(net, 0) : Math.max(-net, 0);
-    const creditColumn = isDebitNormal ? Math.max(-net, 0) : Math.max(net, 0);
+    let debitColumn = 0;
+    let creditColumn = 0;
 
-    lines.push({
-      code: account.code,
-      name: account.name,
-      type: account.type,
-      debit: debitColumn,
-      credit: creditColumn,
-    });
+    if (account.normalBalance === 'debit') {
+      const balance = debitSum - creditSum;
+      if (balance >= 0) debitColumn = balance;
+      else creditColumn = -balance; // abnormal balance, flips to the other side
+    } else {
+      const balance = creditSum - debitSum;
+      if (balance >= 0) creditColumn = balance;
+      else debitColumn = -balance; // abnormal balance, flips to the other side
+    }
 
+    lines.push({ code: account.code, name: account.name, type: account.type, debit: debitColumn, credit: creditColumn });
     totalDebit += debitColumn;
     totalCredit += creditColumn;
   }
